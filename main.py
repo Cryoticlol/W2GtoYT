@@ -118,6 +118,24 @@ def add_video_to_playlist(youtube, playlist_id, video_id):
     print(f"Added video: {video_id}")
     return response
 
+# Persistence Functions if to many videos are to be added (YT API has quota limits)
+def load_processed_ids(path="added_videos.txt"):
+    if not os.path.exists(path):
+        return set()
+    with open(path, "r") as f:
+        return set(line.strip() for line in f.readlines())
+
+def save_processed_id(video_id, path="added_videos.txt"):
+    with open(path, "a") as f:
+        f.write(video_id + "\n")
+
+def load_playlist_id(path="playlist_id.txt"):
+    return open(path).read().strip() if os.path.exists(path) else None
+
+def save_playlist_id(pid, path="playlist_id.txt"):
+    with open(path, "w") as f:
+        f.write(pid)
+
 
 # Main Function
 def main():
@@ -140,15 +158,32 @@ def main():
     # Authenticate with YouTube
     youtube = get_youtube_service()
 
-    # Create playlist
-    playlist_id = create_playlist(youtube, "W2G Auto Playlist")
+    # Create playlist or load existing
+    playlist_id = load_playlist_id()
+
+    if not playlist_id:
+        playlist_id = create_playlist(youtube, "W2G Auto Playlist")
+        save_playlist_id(playlist_id)
+    else:
+        print(f"Using existing playlist: {playlist_id}")
+
+    # Load already processed video IDs
+    processed = load_processed_ids()
 
     # Add each video
     for video in videos:
+        vid = video['video_id']
+
+        # Skip videos already added
+        if vid in processed:
+            print(f"Skipping (already added): {vid}")
+            continue
+
         try:
-            add_video_to_playlist(youtube, playlist_id, video['video_id'])
+            add_video_to_playlist(youtube, playlist_id, vid)
+            save_processed_id(vid)
         except Exception as e:
-            print(f"Failed to add {video['video_id']}: {e}")
+            print(f"Failed to add {vid}: {e}")
 
     print(f"Playlist complete: https://www.youtube.com/playlist?list={playlist_id}")
 
